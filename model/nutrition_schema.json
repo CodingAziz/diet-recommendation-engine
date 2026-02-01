@@ -1,1 +1,11 @@
-["Calories", "FatContent", "SaturatedFatContent", "CholesterolContent", "SodiumContent", "CarbohydrateContent", "FiberContent", "SugarContent", "ProteinContent"]
+[
+  "Calories",
+  "FatContent",
+  "SaturatedFatContent",
+  "CholesterolContent",
+  "SodiumContent",
+  "CarbohydrateContent",
+  "FiberContent",
+  "SugarContent",
+  "ProteinContent"
+]

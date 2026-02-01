@@ -3,6 +3,7 @@ from pydantic import BaseModel,conlist
 from typing import List,Optional
 import pandas as pd
 from model import recommend,output_recommended_recipes
+from fastapi.middleware.cors import CORSMiddleware
 
 
 dataset=pd.read_csv('../Data/dataset.csv',compression='gzip')
@@ -40,6 +41,15 @@ class Recipe(BaseModel):
 class PredictionOut(BaseModel):
     output: Optional[List[Recipe]] = None
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",  # Vite default
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def home():
@@ -54,4 +64,3 @@ def update_item(prediction_input:PredictionIn):
         return {"output":None}
     else:
         return {"output":output}
-

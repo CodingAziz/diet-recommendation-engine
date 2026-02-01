@@ -5,10 +5,6 @@ import pandas as pd
 import re
 from sklearn.metrics.pairwise import cosine_similarity
 
-# =========================================================
-# Load artifacts ONCE (at import time)
-# =========================================================
-
 with open("scaler.pkl", "rb") as f:
     SCALER = pickle.load(f)
 
@@ -17,10 +13,6 @@ with open("knn.pkl", "rb") as f:
 
 with open("nutrition_schema.json", "r") as f:
     NUTRITION_COLS = json.load(f)
-
-# =========================================================
-# Utility functions
-# =========================================================
 
 def extract_quoted_strings(s):
     if pd.isna(s):
@@ -61,11 +53,6 @@ def apply_goal_rules(df, goals=None):
 
     return df
 
-
-# =========================================================
-# Core recommendation logic
-# =========================================================
-
 def recommend(
     dataset: pd.DataFrame,
     nutrition_input: list,
@@ -84,22 +71,13 @@ def recommend(
     ingredients = ingredients or []
     params = params or {"n_neighbors": 5}
 
-    # -----------------------------
-    # Step 1: Ingredient filtering
-    # -----------------------------
     filtered_df = filter_by_ingredients(dataset, ingredients)
 
-    # -----------------------------
-    # Step 2: Goal-based rules
-    # -----------------------------
     filtered_df = apply_goal_rules(filtered_df, goals)
 
     if filtered_df.empty:
         return None
 
-    # -----------------------------
-    # Step 3: Prepare nutrition vectors
-    # -----------------------------
     X = filtered_df[NUTRITION_COLS].values
     X_scaled = SCALER.transform(X)
 
@@ -108,9 +86,6 @@ def recommend(
 
     n_neighbors = params.get("n_neighbors", 5)
 
-    # -----------------------------
-    # Step 4: KNN similarity (PRIMARY)
-    # -----------------------------
     try:
         distances, indices = KNN_MODEL.kneighbors(
             user_vec_scaled,
@@ -118,11 +93,8 @@ def recommend(
         )
 
         recommended_df = filtered_df.iloc[indices[0]].copy()
-        recommended_df["score"] = 1 - distances[0]  # similarity score
+        recommended_df["score"] = 1 - distances[0]
 
-    # -----------------------------
-    # Step 5: Fallback similarity
-    # -----------------------------
     except Exception:
         similarity = cosine_similarity(user_vec_scaled, X_scaled)[0]
         filtered_df["score"] = similarity
@@ -131,11 +103,6 @@ def recommend(
         ).head(n_neighbors)
 
     return recommended_df
-
-
-# =========================================================
-# Output formatting (API-safe)
-# =========================================================
 
 def output_recommended_recipes(df: pd.DataFrame):
     if df is None or df.empty:
