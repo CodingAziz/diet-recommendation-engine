@@ -5,13 +5,13 @@ import pandas as pd
 import re
 from sklearn.metrics.pairwise import cosine_similarity
 
-with open("scaler.pkl", "rb") as f:
+with open("/Users/aziz/Documents/Collaborative Projects/Diet-Recommendation-System-main/model/scaler.pkl", "rb") as f:
     SCALER = pickle.load(f)
 
-with open("knn.pkl", "rb") as f:
+with open("/Users/aziz/Documents/Collaborative Projects/Diet-Recommendation-System-main/model/knn.pkl", "rb") as f:
     KNN_MODEL = pickle.load(f)
 
-with open("nutrition_schema.json", "r") as f:
+with open("/Users/aziz/Documents/Collaborative Projects/Diet-Recommendation-System-main/model/nutrition_schema.json", "r") as f:
     NUTRITION_COLS = json.load(f)
 
 def extract_quoted_strings(s):

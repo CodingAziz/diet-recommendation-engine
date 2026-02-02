@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel,conlist
 from typing import List,Optional
 import pandas as pd
-from model import recommend,output_recommended_recipes
+from model import recommend, output_recommended_recipes
+# from main_model import recommend, output_recommended_recipes
 from fastapi.middleware.cors import CORSMiddleware
 
 
