@@ -1,5 +1,6 @@
 """Configuration management for Diet Recommendation System"""
 import os
+from pathlib import Path
 from typing import Optional
 
 
@@ -22,7 +23,7 @@ class Settings:
     RANDOM_SEED: int = 42
     
     # Data Configuration
-    DATA_PATH: str = os.getenv("DATA_PATH", "../Data/dataset.csv")
+    DATA_PATH: str = os.getenv("DATA_PATH", str(Path(__file__).resolve().parent.parent / 'Data' / 'dataset.csv'))
     CACHE_ENABLED: bool = os.getenv("CACHE_ENABLED", "True").lower() == "true"
     CACHE_TTL: int = int(os.getenv("CACHE_TTL", "3600"))  # 1 hour in seconds
     
