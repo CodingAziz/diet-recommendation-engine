@@ -4,3 +4,6 @@ FastAPI_Backend/keys.py
 FastAPI_Backend/data.py
 test.py
 test.ipynb
+logs/
+model/
+scripts/

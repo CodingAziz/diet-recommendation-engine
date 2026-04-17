@@ -1,6 +1,56 @@
-fastapi== 0.88.0
-uvicorn==0.20.0
-numpy==1.24.1
-scikit-learn==1.1.3
-pandas==1.5.1
+# Core dependencies
+fastapi==0.88.0
+uvicorn[standard]==0.20.0
 pydantic==1.10.4
+pydantic-settings==2.0.0
+
+# Data science and ML
+numpy==1.24.1
+pandas==1.5.1
+scikit-learn==1.1.3
+scipy==1.10.1
+joblib==1.3.2
+
+# Testing
+pytest==7.4.0
+pytest-cov==4.1.0
+pytest-asyncio==0.21.1
+pytest-mock==3.11.1
+
+# Code quality
+black==23.7.0
+isort==5.12.0
+flake8==6.0.0
+mypy==1.5.1
+pre-commit==3.4.0
+
+# Performance monitoring
+psutil==5.9.5
+memory-profiler==0.61.0
+
+# Model explainability (optional)
+shap==0.42.1
+
+# Logging and monitoring
+structlog==23.1.0
+sentry-sdk[fastapi]==1.28.1
+
+# Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# HTTP client for health checks
+httpx==0.24.1
+
+# Development
+python-dotenv==1.0.0
+
+# Documentation
+mkdocs==1.5.2
+mkdocs-material==9.1.21
+
+# Optional: For advanced features
+# tensorflow==2.13.0  # For deep learning models
+# torch==2.0.1        # PyTorch for advanced ML
+# transformers==4.30.0 # Hugging Face transformers
