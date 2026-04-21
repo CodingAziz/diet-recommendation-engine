@@ -7,8 +7,6 @@ from pathlib import Path
 import pandas as pd
 from datetime import datetime
 from .model import (
-    recommend,
-    output_recommended_recipes,
     explain_recommendation,
     get_model_feature_importance,
     get_recommendation_statistics as get_recommendation_statistics_model
