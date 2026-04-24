@@ -1,10 +1,7 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, conlist, Field
-from typing import List, Optional, Dict, Any
-from pathlib import Path
-import pandas as pd
+from typing import Optional
 from datetime import datetime
 from .model import (
     explain_recommendation,
@@ -13,7 +10,17 @@ from .model import (
 )
 from .config import Settings
 from .logging_config import setup_logging
-import logging
+from .utils.data_loader import load_dataset
+from .utils.preprocessing import parse_ingredients
+from .models.recommender import Recommender
+from .schemas.prediction import params, PredictionIn, PredictionOut
+from .schemas.explain import ExplainIn, ExplanationResponse
+from .schemas.feedback import FeedbackIn, FeedbackOut
+from .schemas.health import HealthResponse
+from .schemas.model_info import ModelInfoResponse
+from .schemas.performance import PerformanceMetrics, ModelPerformanceResponse
+from .schemas.recipe import Recipe
+from .schemas.stats import StatisticsResponse, StatsRequest
 
 # Initialize logging
 logger = setup_logging()
@@ -21,139 +28,12 @@ logger = setup_logging()
 # Load configuration
 settings = Settings()
 
-# Load dataset (commented out for demo - using sample data instead)
-# BASE_DIR = Path(__file__).resolve().parent.parent
-# dataset = pd.read_csv(BASE_DIR / 'Data' / 'dataset.csv', compression='gzip')
-
 app = FastAPI(
     title="Diet Recommendation System API",
     description="AI-powered nutrition-based recipe recommendations using hybrid filtering",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
 )
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-IMAGE_DIR = BASE_DIR / "Data" / "images"
-if IMAGE_DIR.exists():
-    app.mount("/images", StaticFiles(directory=str(IMAGE_DIR)), name="images")
-
-
-class params(BaseModel):
-    n_neighbors: int = Field(default=5, ge=1, le=100, description="Number of recommendations to return")
-    return_distance: bool = False
-
-class PredictionIn(BaseModel):
-    nutrition_input: conlist(float, min_items=9, max_items=9) = Field(
-        ...,
-        description="Target nutritional values: [calories, fat, sat_fat, cholesterol, sodium, carbs, fiber, sugar, protein]"
-    )
-    ingredients: list[str] = Field(default=[], description="Preferred ingredients to filter by")
-    params: Optional[params] = None
-    bmi: float = Field(..., gt=0, le=100, description="Body Mass Index for personalization")
-    goal: str = Field(..., pattern="^(weight_loss|muscle_gain|maintenance)$",
-                     description="Fitness goal: weight_loss, muscle_gain, or maintenance")
-    metric: str = Field(..., pattern="^(nutritional_mae|diversity_score)$",
-                       description="Selection metric: nutritional_mae or diversity_score")
-
-class Recipe(BaseModel):
-    Name: str
-    CookTime: str
-    PrepTime: str
-    TotalTime: str
-    RecipeIngredientParts: list[str]
-    Calories: float
-    FatContent: float
-    SaturatedFatContent: float
-    CholesterolContent: float
-    SodiumContent: float
-    CarbohydrateContent: float
-    FiberContent: float
-    SugarContent: float
-    ProteinContent: float
-    RecipeInstructions: list[str]
-
-class PredictionOut(BaseModel):
-    output: Optional[List[Recipe]] = None
-    metadata: Optional[Dict[str, Any]] = None
-
-class HealthResponse(BaseModel):
-    status: str
-    version: str
-    timestamp: datetime
-    uptime_seconds: Optional[float] = None
-
-class ModelInfoResponse(BaseModel):
-    available_models: List[str]
-    available_metrics: List[str]
-    default_metric: str
-    model_details: Dict[str, Dict[str, Any]]
-
-class PerformanceMetrics(BaseModel):
-    nutritional_mae: float
-    diversity_score: float
-    latency_ms: float
-    coverage: float
-
-class ModelPerformanceResponse(BaseModel):
-    models: Dict[str, PerformanceMetrics]
-    recommendations: Dict[str, str]
-    last_updated: datetime
-
-class FeedbackIn(BaseModel):
-    user_id: str = Field(..., description="Unique user identifier")
-    recipe_id: str = Field(..., description="Recipe ID or name that was recommended")
-    rating: int = Field(..., ge=1, le=5, description="User rating (1-5)")
-    was_helpful: bool = Field(..., description="Whether the recommendation was helpful")
-    comments: Optional[str] = Field(None, max_length=500, description="Optional feedback comments")
-    session_id: Optional[str] = Field(None, description="Session identifier for tracking")
-
-class FeedbackOut(BaseModel):
-    status: str
-    feedback_id: str
-    message: str
-    timestamp: datetime
-
-class ExplainIn(BaseModel):
-    recipe_id: int = Field(..., ge=0, description="Recipe index or ID for explanation")
-    nutrition_input: conlist(float, min_items=9, max_items=9) = Field(
-        ...,
-        description="Target nutritional values: [calories, fat, sat_fat, cholesterol, sodium, carbs, fiber, sugar, protein]"
-    )
-    bmi: Optional[float] = Field(None, gt=0, le=100, description="Body Mass Index for personalization")
-    goal: Optional[str] = Field(None, pattern="^(weight_loss|muscle_gain|maintenance)$",
-                              description="Fitness goal: weight_loss, muscle_gain, or maintenance")
-
-class ExplanationResponse(BaseModel):
-    recipe_id: int
-    recipe_name: str
-    explanation: Dict[str, Any]
-    model_used: str
-    confidence: float
-    timestamp: datetime
-
-class StatsRequest(BaseModel):
-    nutrition_input: conlist(float, min_items=9, max_items=9) = Field(
-        ...,
-        description="Target nutritional values: [calories, fat, sat_fat, cholesterol, sodium, carbs, fiber, sugar, protein]"
-    )
-    metric: str = Field("nutritional_mae", pattern="^(nutritional_mae|diversity_score)$")
-    bmi: Optional[float] = Field(None, gt=0, le=100)
-    goal: Optional[str] = Field(None, pattern="^(weight_loss|muscle_gain|maintenance)$")
-
-class FeatureImportanceResponse(BaseModel):
-    feature_importance: List[Dict[str, Any]]
-    methodology: str
-    timestamp: datetime
-
-class StatisticsResponse(BaseModel):
-    recommendation_count: int
-    nutrition_statistics: Dict[str, Any]
-    error_analysis: Dict[str, Dict[str, float]]
-    diversity_score: float
-    model_used: str
-    target_nutrition: Dict[str, float]
-    timestamp: datetime
 
 app.add_middleware(
     CORSMiddleware,
@@ -168,198 +48,81 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+df = parse_ingredients(load_dataset())
+
+recommender = Recommender(df)
+
 @app.post("/predict/", response_model=PredictionOut)
 def predict_recipes(prediction_input: PredictionIn):
-    """Generate personalized recipe recommendations based on nutritional requirements and user profile."""
     try:
-        logger.info(f"Processing prediction request for user with BMI {prediction_input.bmi}, goal {prediction_input.goal}, metric {prediction_input.metric}")
+        results = recommender.recommend(
+            input_vec=prediction_input.nutrition_input,
+            model="hybrid",  # or map from metric if needed
+            bmi=prediction_input.bmi,
+            goal=prediction_input.goal,
+            top_k=prediction_input.params.n_neighbors if prediction_input.params else 5
+        )
 
-        # For demo purposes, return sample recommendations instead of calling the model
-        # TODO: Re-enable actual model when dataset loading issues are resolved
-        sample_recipes = [
-            {
-                "Name": "Oatmeal with Berries",
-                "CookTime": "10 minutes",
-                "PrepTime": "5 minutes",
-                "TotalTime": "15 minutes",
-                "RecipeIngredientParts": ["oats", "berries", "milk", "honey"],
-                "Calories": 320.0,
-                "FatContent": 8.0,
-                "SaturatedFatContent": 1.5,
-                "CholesterolContent": 5.0,
-                "SodiumContent": 150.0,
-                "CarbohydrateContent": 55.0,
-                "FiberContent": 7.0,
-                "SugarContent": 20.0,
-                "ProteinContent": 12.0,
-                "RecipeInstructions": ["Mix oats and milk", "Add berries", "Cook for 5 minutes", "Serve with honey"]
-            },
-            {
-                "Name": "Grilled Chicken Salad",
-                "CookTime": "15 minutes",
-                "PrepTime": "10 minutes",
-                "TotalTime": "25 minutes",
-                "RecipeIngredientParts": ["chicken breast", "lettuce", "tomatoes", "olive oil", "lemon"],
-                "Calories": 380.0,
-                "FatContent": 15.0,
-                "SaturatedFatContent": 2.5,
-                "CholesterolContent": 80.0,
-                "SodiumContent": 300.0,
-                "CarbohydrateContent": 15.0,
-                "FiberContent": 5.0,
-                "SugarContent": 8.0,
-                "ProteinContent": 35.0,
-                "RecipeInstructions": ["Grill chicken", "Chop vegetables", "Mix with dressing", "Serve fresh"]
-            },
-            {
-                "Name": "Baked Salmon with Vegetables",
-                "CookTime": "20 minutes",
-                "PrepTime": "10 minutes",
-                "TotalTime": "30 minutes",
-                "RecipeIngredientParts": ["salmon fillet", "broccoli", "carrots", "olive oil", "herbs"],
-                "Calories": 420.0,
-                "FatContent": 25.0,
-                "SaturatedFatContent": 4.0,
-                "CholesterolContent": 90.0,
-                "SodiumContent": 250.0,
-                "CarbohydrateContent": 20.0,
-                "FiberContent": 8.0,
-                "SugarContent": 10.0,
-                "ProteinContent": 38.0,
-                "RecipeInstructions": ["Season salmon", "Chop vegetables", "Bake at 400°F", "Serve hot"]
+        # Ingredient filtering
+        if prediction_input.ingredients:
+            results = results[
+                results["RecipeIngredientParts"].apply(
+                    lambda x: any(i.lower() in [e.lower() for e in x] for i in prediction_input.ingredients)
+                )
+            ]
+
+        return PredictionOut(
+            output=results.to_dict(orient="records"),
+            metadata={
+                "model_used": "hybrid",
+                "count": len(results)
             }
-        ]
-
-        # Filter by ingredients if provided
-        if prediction_input.ingredients and len(prediction_input.ingredients) > 0:
-            filtered_recipes = []
-            for recipe in sample_recipes:
-                recipe_parts = [part.lower() for part in recipe['RecipeIngredientParts']]
-                if any(ing.lower() in recipe_parts for ing in prediction_input.ingredients):
-                    filtered_recipes.append(recipe)
-            
-            if filtered_recipes:
-                sample_recipes = filtered_recipes
-            else:
-                # If no recipes match, create a custom one with user's ingredients
-                sample_recipes = [
-                    {
-                        "Name": "Custom Recipe with Your Ingredients",
-                        "CookTime": "15 minutes",
-                        "PrepTime": "10 minutes",
-                        "TotalTime": "25 minutes",
-                        "RecipeIngredientParts": prediction_input.ingredients,
-                        "Calories": 350.0,
-                        "FatContent": 12.0,
-                        "SaturatedFatContent": 2.0,
-                        "CholesterolContent": 50.0,
-                        "SodiumContent": 200.0,
-                        "CarbohydrateContent": 30.0,
-                        "FiberContent": 6.0,
-                        "SugarContent": 15.0,
-                        "ProteinContent": 25.0,
-                        "RecipeInstructions": ["Mix ingredients", "Cook according to preferences", "Serve fresh"]
-                    }
-                ]
-
-        metadata = {
-            "model_used": "demo_sample",
-            "metric_basis": prediction_input.metric,
-            "total_candidates": len(sample_recipes),
-            "request_timestamp": datetime.now().isoformat(),
-            "note": "Demo data - full model temporarily disabled due to dataset loading issues"
-        }
-
-        logger.info(f"Generated {len(sample_recipes)} sample recommendations")
-        return PredictionOut(output=sample_recipes, metadata=metadata)
+        )
 
     except Exception as e:
-        logger.error(f"Error in prediction endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
-
+        raise HTTPException(status_code=500, detail=str(e))
+    
 @app.get("/predict", response_model=PredictionOut)
 def predict_recipes_get(
-    nutrition_input: str = Query("2000,65,20,0,2000,300,25,50,150", description="Nutrition input as comma-separated values"),
-    ingredients: str = Query("", description="Preferred ingredients as comma-separated values"),
-    n_neighbors: int = Query(5, ge=1, le=100, description="Number of recommendations"),
-    metric: str = Query("nutritional_mae", pattern="^(nutritional_mae|diversity_score)$", description="Selection metric"),
-    bmi: float = Query(25.0, gt=0, le=100, description="Body Mass Index"),
-    goal: str = Query("maintenance", pattern="^(weight_loss|muscle_gain|maintenance)$", description="Fitness goal")
+    nutrition_input: str,
+    ingredients: str = "",
+    n_neighbors: int = 5,
+    metric: str = "nutritional_mae",
+    bmi: float = 25.0,
+    goal: str = "maintenance"
 ):
-    """Generate personalized recipe recommendations (GET version for frontend compatibility)."""
     try:
-        logger.info(f"Processing GET prediction request with BMI {bmi}, goal {goal}, metric {metric}")
+        # Convert string → list
+        input_vec = list(map(float, nutrition_input.split(",")))
+        ingredient_list = [i.strip() for i in ingredients.split(",") if i]
 
-        # For demo purposes, return sample recommendations instead of calling the model
-        sample_recipes = [
-            {
-                "Name": "Oatmeal with Berries",
-                "CookTime": "10 minutes",
-                "PrepTime": "5 minutes",
-                "TotalTime": "15 minutes",
-                "RecipeIngredientParts": ["oats", "berries", "milk", "honey"],
-                "Calories": 320.0,
-                "FatContent": 8.0,
-                "SaturatedFatContent": 1.5,
-                "CholesterolContent": 5.0,
-                "SodiumContent": 150.0,
-                "CarbohydrateContent": 55.0,
-                "FiberContent": 7.0,
-                "SugarContent": 20.0,
-                "ProteinContent": 12.0,
-                "RecipeInstructions": ["Mix oats and milk", "Add berries", "Cook for 5 minutes", "Serve with honey"]
-            },
-            {
-                "Name": "Grilled Chicken Salad",
-                "CookTime": "15 minutes",
-                "PrepTime": "10 minutes",
-                "TotalTime": "25 minutes",
-                "RecipeIngredientParts": ["chicken breast", "lettuce", "tomatoes", "olive oil", "lemon"],
-                "Calories": 380.0,
-                "FatContent": 15.0,
-                "SaturatedFatContent": 2.5,
-                "CholesterolContent": 80.0,
-                "SodiumContent": 300.0,
-                "CarbohydrateContent": 15.0,
-                "FiberContent": 5.0,
-                "SugarContent": 8.0,
-                "ProteinContent": 35.0,
-                "RecipeInstructions": ["Grill chicken", "Chop vegetables", "Mix with dressing", "Serve fresh"]
-            },
-            {
-                "Name": "Baked Salmon with Vegetables",
-                "CookTime": "20 minutes",
-                "PrepTime": "10 minutes",
-                "TotalTime": "30 minutes",
-                "RecipeIngredientParts": ["salmon fillet", "broccoli", "carrots", "olive oil", "herbs"],
-                "Calories": 420.0,
-                "FatContent": 25.0,
-                "SaturatedFatContent": 4.0,
-                "CholesterolContent": 90.0,
-                "SodiumContent": 250.0,
-                "CarbohydrateContent": 20.0,
-                "FiberContent": 8.0,
-                "SugarContent": 10.0,
-                "ProteinContent": 38.0,
-                "RecipeInstructions": ["Season salmon", "Chop vegetables", "Bake at 400°F", "Serve hot"]
+        results = recommender.recommend(
+            input_vec=input_vec,
+            model="hybrid",
+            bmi=bmi,
+            goal=goal,
+            top_k=n_neighbors
+        )
+
+        # Ingredient filter
+        if ingredient_list:
+            results = results[
+                results["RecipeIngredientParts"].apply(
+                    lambda x: any(i.lower() in [e.lower() for e in x] for i in ingredient_list)
+                )
+            ]
+
+        return PredictionOut(
+            output=results.to_dict(orient="records"),
+            metadata={
+                "model_used": "hybrid",
+                "count": len(results)
             }
-        ]
-
-        metadata = {
-            "model_used": "demo_sample",
-            "metric_basis": metric,
-            "total_candidates": len(sample_recipes),
-            "request_timestamp": datetime.now().isoformat(),
-            "note": "Demo data - full model not loaded for performance"
-        }
-
-        logger.info(f"Returned {len(sample_recipes)} sample recommendations")
-        return PredictionOut(output=sample_recipes, metadata=metadata)
+        )
 
     except Exception as e:
-        logger.error(f"Error in GET prediction endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
-
+        raise HTTPException(status_code=500, detail=str(e))
+    
 @app.get("/health", response_model=HealthResponse)
 def health_check():
     """Health check endpoint for monitoring system status."""

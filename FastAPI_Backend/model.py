@@ -13,9 +13,6 @@ import logging
 warnings.filterwarnings('ignore')
 logger = logging.getLogger(__name__)
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_PATH = BASE_DIR / 'Data' / 'dataset_with_images.csv.gz'
-
 NUTRITION_COLS = [
     'Calories', 'FatContent', 'SaturatedFatContent',
     'CholesterolContent', 'SodiumContent',
@@ -23,28 +20,32 @@ NUTRITION_COLS = [
     'SugarContent', 'ProteinContent'
 ]
 
-# Load and preprocess data
-df = pd.read_csv(DATA_PATH, compression='gzip')
-df = df.dropna(subset=NUTRITION_COLS)
-for col in NUTRITION_COLS:
-    df[col] = pd.to_numeric(df[col], errors='coerce')
-df = df.dropna(subset=NUTRITION_COLS)
+DATA_PATH='../Data/dataset_uncompressed.csv'
+
+ 
+df = pd.read_csv(DATA_PATH) # read csv file
+
+df[NUTRITION_COLS] = df[NUTRITION_COLS].apply(pd.to_numeric, errors='coerce') # vectorized conversion to numeric form
+df = df.dropna(subset=NUTRITION_COLS) # drop any null numeric values
+
 df['RecipeIngredientParts'] = df['RecipeIngredientParts'].apply(
-    lambda x: x if isinstance(x, list) else str(x).split(';')
-)
-df.reset_index(drop=True, inplace=True)
+    lambda x: x if isinstance(x, list)
+    else [] if pd.isna(x)
+    else str(x).split(';')
+) # splits the ingredients into parts
 
-# Create empty dataframe for demo (functions will return sample data)
-df = pd.DataFrame()
+df.reset_index(drop=True, inplace=True) # reset index of the dataset
 
-# Scalers
+
+df = pd.DataFrame() # create an empty dataframe
+
 minmax_scaler = MinMaxScaler()
-X_minmax = minmax_scaler.fit_transform(df[NUTRITION_COLS])
+X_minmax = minmax_scaler.fit_transform(df[NUTRITION_COLS]) # Scales each feature to range of [0-1]
 
 std_scaler = StandardScaler()
-X_std = std_scaler.fit_transform(df[NUTRITION_COLS])
+X_std = std_scaler.fit_transform(df[NUTRITION_COLS]) # Transforms data to mean or std_dev
 
-# Models
+# KNN
 K_CANDIDATES = 50
 TOP_K = 10
 
@@ -54,18 +55,21 @@ knn_cosine.fit(X_minmax)
 knn_euclidean = NearestNeighbors(n_neighbors=K_CANDIDATES, metric='euclidean')
 knn_euclidean.fit(X_std)
 
+# KMeans
 N_CLUSTERS = 20
 kmeans = KMeans(n_clusters=N_CLUSTERS, random_state=42, n_init=10)
 df['cluster'] = kmeans.fit_predict(X_std)
 
+# SVD
 N_COMPONENTS = 5
 svd = TruncatedSVD(n_components=N_COMPONENTS, random_state=42)
 X_svd = svd.fit_transform(X_std)
 
+# KNN_SVD
 knn_svd = NearestNeighbors(n_neighbors=K_CANDIDATES, metric='cosine')
 knn_svd.fit(X_svd)
 
-# Model functions (stub implementations for demo)
+# Model functions
 def recommend_knn_cosine(target_vector, top_k=10):
     # Return empty dataframe for demo
     return pd.DataFrame()
