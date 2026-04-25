@@ -8,10 +8,24 @@ NUTRITION_COLS = [
     "SugarContent","ProteinContent"
 ]
 
-def parse_ingredients(x):
-    if pd.isna(x):
+def parse_ingredients(df):
+    def clean(x):
+        if x is None:
+            return []
+        
+        if isinstance(x, float) and pd.isna(x):
+            return []
+        
+        if isinstance(x, str):
+            return [i.strip() for i in x.split(",")]
+        
+        if isinstance(x, list):
+            return x
+        
         return []
-    return re.findall(r'"([^"]*)"', x)
+
+    df["RecipeIngredientParts"] = df["RecipeIngredientParts"].apply(clean)
+    return df
 
 def preprocess(df):
     # convert nutrition to numeric
