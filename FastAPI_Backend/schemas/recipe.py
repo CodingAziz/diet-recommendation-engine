@@ -5,7 +5,7 @@ class Recipe(BaseModel):
     CookTime: str
     PrepTime: str
     TotalTime: str
-    RecipeIngredientParts: list[str]
+    RecipeIngredientParts: str
     Calories: float
     FatContent: float
     SaturatedFatContent: float
@@ -15,4 +15,4 @@ class Recipe(BaseModel):
     FiberContent: float
     SugarContent: float
     ProteinContent: float
-    RecipeInstructions: list[str]
+    RecipeInstructions: str

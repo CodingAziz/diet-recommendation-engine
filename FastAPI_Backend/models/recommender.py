@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.neighbors import NearestNeighbors
 from sklearn.cluster import KMeans
@@ -44,21 +43,38 @@ class Recommender:
         self.knn_svd = NearestNeighbors(n_neighbors=50, metric='cosine')
         self.knn_svd.fit(self.X_svd)
 
+    def _prepare_input(self, input_vec):
+        # Case 1: frontend sends dict (BEST)
+        if isinstance(input_vec, dict):
+            df = pd.DataFrame([input_vec])
+
+        # Case 2: frontend sends list/array
+        else:
+            df = pd.DataFrame([input_vec], columns=NUTRITION_COLS)
+
+        # Ensure correct column order
+        df = df[NUTRITION_COLS]
+
+        return df
+
     # KNN cosine
     def recommend_knn_cosine(self, input_vec, top_k=10):
-        x = self.minmax_scaler.transform([input_vec])
+        df_input = self._prepare_input(input_vec)
+        x = self.minmax_scaler.transform(df_input)
         dist, idx = self.knn_cosine.kneighbors(x)
         return self._build_result(idx[0], dist[0], top_k)
 
     # KNN euclidean
     def recommend_knn_euclidean(self, input_vec, top_k=10):
-        x = self.std_scaler.transform([input_vec])
+        df_input = self._prepare_input(input_vec)
+        x = self.std_scaler.transform(df_input)
         dist, idx = self.knn_euclidean.kneighbors(x)
         return self._build_result(idx[0], dist[0], top_k)
 
     # Kmeans
     def recommend_kmeans(self, input_vec, top_k=10):
-        x = self.std_scaler.transform([input_vec])
+        df_input = self._prepare_input(input_vec)
+        x = self.std_scaler.transform(df_input)
         cluster = self.kmeans.predict(x)[0]
 
         cluster_df = self.df[self.df['cluster'] == cluster]
@@ -71,7 +87,8 @@ class Recommender:
 
     # SVD + KNN
     def recommend_svd(self, input_vec, top_k=10):
-        x = self.std_scaler.transform([input_vec])
+        df_input = self._prepare_input(input_vec)
+        x = self.std_scaler.transform(df_input)
         x_svd = self.svd.transform(x)
 
         dist, idx = self.knn_svd.kneighbors(x_svd)
@@ -106,13 +123,17 @@ class Recommender:
         df2 = self.recommend_knn_euclidean(input_vec, 30)
         df3 = self.recommend_svd(input_vec, 30)
 
-        combined = pd.concat([df1, df2, df3]).drop_duplicates()
+        combined = pd.concat([df1, df2, df3])
+
+        # Only dedupe on numeric columns (safe)
+        combined = combined.drop_duplicates(subset=NUTRITION_COLS)
 
         # Apply health penalty
         penalties = self.health_penalty(combined, bmi, goal)
 
         if len(penalties) > 0:
-            combined["final_score"] = -penalties
+            if len(penalties) == len(combined):
+                combined["final_score"] -= penalties
             combined = combined.sort_values(by="final_score", ascending=False)
 
         return combined.head(top_k)
