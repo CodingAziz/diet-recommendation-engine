@@ -2,7 +2,7 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from .config import Settings
 from .logging_config import setup_logging
-from .routes import predictions
+from .FastAPI_Backend.routes import predictions
 
 # Initialize logging
 logger = setup_logging()

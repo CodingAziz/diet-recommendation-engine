@@ -1,6 +1,6 @@
 __pycache__
-Assets/
-Data/
-logs/
-.env
-.python-version
+assets/
+data/
+modifications/
+.env*
+.python*
